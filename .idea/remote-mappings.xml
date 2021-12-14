@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteMappingsManager">
+    <list>
+      <list>
+        <remote-mappings server-id="python@6ac4586c-6181-4d7a-89f1-7067f326559d" />
+        <remote-mappings server-id="python@sftp://yanking@10.13.56.38:22/home/yanking/.conda/envs/CrossWOZ/bin/python3.8">
+          <settings>
+            <list>
+              <mapping local-root="$PROJECT_DIR$" remote-root="/home/yanking/disk1/nizepu/svdd_vit" />
+            </list>
+          </settings>
+        </remote-mappings>
+      </list>
+    </list>
+  </component>
+</project>
