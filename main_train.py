@@ -5,7 +5,7 @@ from codes import mvtecad
 from functools import reduce
 from torch.utils.data import DataLoader
 import torch.distributed as dist
-from codes.datasets import VisionDataset
+from codes.datasets import *
 from codes.networks import *
 from codes.inspection import eval_encoder_NN_multiK
 from codes.utils import *
@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--obj', default='wood', type=str)
 parser.add_argument('--lambda_value', default=1, type=float)
-parser.add_argument('--D', default=64, type=int)
+parser.add_argument('--D', default=32, type=int)
 
 parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--lr', default=1e-5, type=float)
@@ -28,11 +28,11 @@ device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 
 # efficient_transformer = Linformer(
-#     dim=64,
+#     dim=32,
 #     seq_len=10,  # 3*3 patches + 1 cls-token
 #     depth=12,
 #     heads=8,
-#     k=64
+#     k=32
 # )
 
 
@@ -46,28 +46,28 @@ def train():
     # 搭建网络结构
 
     with task('Networks'):
-        # enc = EncoderHier(64, D).cuda(1)  # 八层卷积
-        # cls_64 = PositionClassifier(64, D).cuda(1)  # 全连接分类
+        # enc = EncoderHier(32, D).cuda(1)  # 八层卷积
+        # cls_32 = PositionClassifier(32, D).cuda(1)  # 全连接分类
         # cls_32 = PositionClassifier(32, D).cuda(1)  # 全连接分类
         ViT_16 = ViT(
-            image_size=256,
+            image_size=48,
             patch_size=16,
             channels=3,
-            dim=128,
-            depth=12,
-            heads=8,
+            dim=1024,
+            depth=24,
+            heads=16,
             mlp_dim=128,
             dropout=0.1,
             emb_dropout=0.1
         ).to(device)
 
-        # ViT_8 = ViT(
-        #     image_size=256,
-        #     patch_size=8,
+        # ViT_32 = ViT(
+        #     image_size=96,
+        #     patch_size=32,
         #     channels=3,
-        #     dim=128,
-        #     depth=12,
-        #     heads=8,
+        #     dim=1024,
+        #     depth=24,
+        #     heads=16,
         #     mlp_dim=128,
         #     dropout=0.1,
         #     emb_dropout=0.1
@@ -85,8 +85,8 @@ def train():
 
         rep = 100
         datasets = dict()
-        datasets['pos_16'] = VisionDataset(train_x, K=16, repeat=rep)
-        datasets['pos_8'] = VisionDataset(train_x, K=8, repeat=rep)
+        datasets['pos_16'] = PositionDataset(train_x, K=16, repeat=rep)
+        # datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
 
         dataset = DictionaryConcatDataset(datasets)
         train_loader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=2, pin_memory=True)
@@ -98,7 +98,7 @@ def train():
         for module in modules:
             module.train()
 
-        for loader in tqdm(train_loader):
+        for loader in train_loader:
             loader = to_device(loader, device)
             loss_pos_16 = ViT_16(loader['pos_16'])
             # loss_pos_8 = ViT_8(loader['pos_8'])
@@ -109,7 +109,7 @@ def train():
             opt.zero_grad()
             loss.backward()
             opt.step()
-        aurocs = eval_encoder_NN_multiK(ViT_16, obj)
+        aurocs = eval_encoder_NN_multiK(enc_16=ViT_16, obj=obj)
         log_result(obj, aurocs)
         # ViT_32.save(obj, 32)
         ViT_16.save(obj, 16)
@@ -120,18 +120,21 @@ def train():
 def log_result(obj, aurocs):
     det_16 = aurocs['det_16'] * 100
     seg_16 = aurocs['seg_16'] * 100
-    # det_8 = aurocs['det_8'] * 100
-    # seg_8 = aurocs['seg_8'] * 100
+    det_32 = aurocs['det_32'] * 100
+    seg_32 = aurocs['seg_32'] * 100
     #
     #
-    # det_sum = aurocs['det_sum'] * 100
-    # seg_sum = aurocs['seg_sum'] * 100
-    #
-    # det_mult = aurocs['det_mult'] * 100
-    # seg_mult = aurocs['seg_mult'] * 100
+    det_sum = aurocs['det_sum'] * 100
+    seg_sum = aurocs['seg_sum'] * 100
+
+    det_mult = aurocs['det_mult'] * 100
+    seg_mult = aurocs['seg_mult'] * 100
 
     print(
         f'|K16| Det: {det_16:4.1f} Seg: {seg_16:4.1f} '
+        f'|K32| Det: {det_32:4.1f} Seg: {seg_32:4.1f} '
+        f'|sum| Det: {det_sum:4.1f} Seg: {seg_sum:4.1f} '
+        f'|mult| Det: {det_mult:4.1f} Seg: {seg_mult:4.1f} '
         f'({obj})')
 
 

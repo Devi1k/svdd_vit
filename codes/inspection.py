@@ -11,7 +11,7 @@ __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
 def infer(x, enc, K):
     x = NHWC2NCHW(x)
     dataset = VisionDataset(x, K=K)
-    loader = DataLoader(dataset, batch_size=64, shuffle=False, pin_memory=True)
+    loader = DataLoader(dataset, batch_size=32, shuffle=False, pin_memory=True)
     embs = np.empty((dataset.N, dataset.row_num, dataset.col_num, enc.D), dtype=np.float32)  # [-1, I, J, D]
     count = 0
     enc = enc.eval()
@@ -37,65 +37,65 @@ def assess_anomaly_maps(obj, anomaly_maps):
 
 #########################
 
-def eval_encoder_NN_multiK(enc_16, obj):
+def eval_encoder_NN_multiK(enc_16, enc_32, obj):
     print("----------evaluating------------")
     x_tr = mvtecad.get_x_standardized(obj, mode='train')
     x_te = mvtecad.get_x_standardized(obj, mode='test')
 
-    # [B,13,13,64]  (batch,conv_weight,conv_height,patch_size)
+    # [B,13,13,32]  (batch,conv_weight,conv_height,patch_size)
     embs16_tr = infer(x_tr, enc_16, K=16)
     embs16_te = infer(x_te, enc_16, K=16)
 
-    # x_tr = mvtecad.get_x_standardized(obj, mode='train')
-    # x_te = mvtecad.get_x_standardized(obj, mode='test')
-    # # [B,57,57,64]
-    # embs8_tr = infer(x_tr, enc_8, K=8)
-    # embs8_te = infer(x_te, enc_8, K=8)
+    x_tr = mvtecad.get_x_standardized(obj, mode='train')
+    x_te = mvtecad.get_x_standardized(obj, mode='test')
+    # [B,57,57,32]
+    embs32_tr = infer(x_tr, enc_32, K=32)
+    embs32_te = infer(x_te, enc_32, K=32)
 
     embs16 = embs16_tr, embs16_te
-    # embs8 = embs8_tr, embs8_te
+    embs32 = embs32_tr, embs32_te
 
-    return eval_embeddings_NN_multiK(obj, embs16)
+    return eval_embeddings_NN_multiK(obj, embs16, embs32)
 
 
-def eval_embeddings_NN_multiK(obj, embs16, NN=1):
+def eval_embeddings_NN_multiK(obj, embs16, embs32, NN=1):
     emb_tr, emb_te = embs16
     # [B,13,13]
     maps_16 = measure_emb_NN(emb_te, emb_tr, method='kdt', NN=NN)
     # 距离最近的正常的patch的距离
     # [B,256,256]
-    maps_16 = distribute_scores(maps_16, (256, 256), K=64, S=16)  # 分配到每个像素上
+    maps_16 = distribute_scores(maps_16, (256, 256), K=16, S=16)  # 分配到每个像素上
     det_16, seg_16 = assess_anomaly_maps(obj, maps_16)
 
-    # emb_tr, emb_te = embs8
-    # maps_8 = measure_emb_NN(emb_te, emb_tr, method='ngt', NN=NN)
-    # maps_8 = distribute_scores(maps_8, (256, 256), K=32, S=4)
-    # det_8, seg_8 = assess_anomaly_maps(obj, maps_8)
-    #
-    # maps_sum = maps_16 + maps_8
-    # det_sum, seg_sum = assess_anomaly_maps(obj, maps_sum)
-    #
-    # maps_mult = maps_16 * maps_8  # equation 9
-    # det_mult, seg_mult = assess_anomaly_maps(obj, maps_mult)
+    emb_tr, emb_te = embs32
+    maps_32 = measure_emb_NN(emb_te, emb_tr, method='ngt', NN=NN)
+    maps_32 = distribute_scores(maps_32, (256, 256), K=32, S=32)
+    det_32, seg_32 = assess_anomaly_maps(obj, maps_32)
+
+    maps_sum = maps_16 + maps_32
+    det_sum, seg_sum = assess_anomaly_maps(obj, maps_sum)
+
+    maps_mult = maps_16 * maps_32  # equation 9
+    det_mult, seg_mult = assess_anomaly_maps(obj, maps_mult)
 
     return {
         'det_16': det_16,
         'seg_16': seg_16,
 
-        # 'det_8': det_8,
-        # 'seg_8': seg_8,
-        #
-        # 'det_sum': det_sum,
-        # 'seg_sum': seg_sum,
-        #
-        # 'det_mult': det_mult,
-        # 'seg_mult': seg_mult,
-        #
-        # 'maps_16': maps_16,
-        # 'maps_8': maps_8,
-        #
-        # 'maps_sum': maps_sum,
-        # 'maps_mult': maps_mult,
+        'det_32': det_32,
+        'seg_32': seg_32,
+
+        'det_sum': det_sum,
+        'seg_sum': seg_sum,
+
+        'det_mult': det_mult,
+        'seg_mult': seg_mult,
+
+        'maps_16': maps_16,
+        'maps_32': maps_32,
+
+        'maps_sum': maps_sum,
+        'maps_mult': maps_mult,
     }
 
 
@@ -109,5 +109,5 @@ def measure_emb_NN(emb_te, emb_tr, method='kdt', NN=1):
     # 找离正常patch最近的距离
     l2_maps, _ = search_NN(emb_te, train_emb_all, method=method, NN=NN)
     anomaly_maps = np.mean(l2_maps, axis=-1)
-    #「 b,w,d,c 」
+    # 「 b,w,d,c 」
     return anomaly_maps
