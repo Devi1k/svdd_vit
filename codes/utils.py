@@ -6,7 +6,6 @@ import torch
 from contextlib import contextmanager
 from PIL import Image
 
-
 __all__ = ['crop_image_CHW', 'PatchDataset_NCHW', 'NHWC2NCHW_normalize', 'NHWC2NCHW',
            'save_binary', 'load_binary', 'makedirpath', 'task', 'DictionaryConcatDataset',
            'to_device', 'distribute_scores', 'resize']
@@ -33,7 +32,7 @@ def to_device(obj, device, non_blocking=False):
 
     if isinstance(obj, tuple):
         return tuple([to_device(v, device, non_blocking=non_blocking)
-                     for v in obj])
+                      for v in obj])
 
 
 @contextmanager
@@ -66,6 +65,23 @@ def crop_CHW(image, i, j, K, S=1):
         h = S * i
         w = S * j
     return image[:, h: h + K, w: w + K]
+
+
+def crop_infer_CHW(image, i, j, K, S=1):
+    C, H, W = image.shape
+    max_height = 3 * K
+    max_width = 3 * K
+    min_height = 0
+    min_width = 0
+    if S == 1:
+        h, w = i, j
+    else:
+        h = S * i
+        w = S * j
+
+
+
+
 
 
 def cnn_output_size(H, K, S=1, P=0) -> int:
@@ -119,7 +135,8 @@ class PatchDataset_NCHW(Dataset):
         K = self.K
         S = self.S
         image = self.arr[n]
-        patch = crop_CHW(image, i, j, K, S)
+        # patch = crop_CHW(image, i, j, K, S)
+        patch = crop_infer_CHW(image, i, j, K, S)
 
         if self.tfs:
             patch = self.tfs(patch)

@@ -135,17 +135,20 @@ class ViT(nn.Module):
         assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
         self.D = dim
         num_patches = (image_height // patch_height) * (image_width // patch_width)
-        window_size = image_height // patch_height
+        window_size = image_height // patch_height // 4
         # num_patches = 9
         patch_dim = channels * patch_height * patch_width
         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
-
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=(3, 3), padding=1, stride=(2, 2)),
+            nn.Conv2d(in_channels=16, out_channels=8, kernel_size=(3, 3), padding=1, stride=(2, 2))
+        )
         self.to_patch_embedding = nn.Sequential(
             Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_height, p2=patch_width),
             nn.Linear(patch_dim, dim),
         )
 
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        # self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         # self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
@@ -154,17 +157,17 @@ class ViT(nn.Module):
         self.pool = pool
         self.to_latent = nn.Identity()
 
-        # self.mlp_head = nn.Sequential(
-        #     nn.LayerNorm(dim),
-        #     nn.Linear(dim, num_classes)
-        # )
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, channels)
+        )
 
     def forward(self, x):
         # x, _ = image
+        x = self.conv(x)
+        x = self.to_patch_embedding(x)
+        b, n, _ = x.shape
         if self.training:
-            x = self.to_patch_embedding(x)
-            b, n, _ = x.size()
-
             mask_id = np.random.rand(b, n, 1)
             mask_id = torch.from_numpy(mask_id).to(torch.float32).to('cuda:1')
             mask_id[mask_id <= 0.5] = 0
@@ -179,6 +182,7 @@ class ViT(nn.Module):
             x = self.transformer(x)
             # x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
             x = self.to_latent(x)
+            # x = self.mlp_head(x)
             x_cur = x.mul((1 - mask_id))
             diff = x_ori - x_cur
             l2 = diff.norm(dim=1)
@@ -186,16 +190,16 @@ class ViT(nn.Module):
 
             return loss_diff
         else:
-            x = self.to_patch_embedding(x)
-            b, n, _ = x.shape
+
             # cls_tokens = repeat(self.cls_token, '() n d -> b n d', b = b)
             # x = torch.cat((cls_tokens, x), dim=1)
-            x += self.pos_embedding[:, :n]
+            # x += self.pos_embedding[:, :n]
             x = self.dropout(x)
             x = self.transformer(x)
             # x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
             x = self.to_latent(x)
-            return x
+            # x = self.mlp_head(x)
+            return x[:, 4, :]
 
     def save(self, name, K):
         fpath = self.fpath_from_name(name, K)

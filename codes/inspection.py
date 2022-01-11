@@ -2,7 +2,7 @@ from codes import mvtecad
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from .utils import NHWC2NCHW, distribute_scores
+from .utils import NHWC2NCHW, distribute_scores, PatchDataset_NCHW
 from codes.datasets import VisionDataset
 
 __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
@@ -10,19 +10,20 @@ __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
 
 def infer(x, enc, K):
     x = NHWC2NCHW(x)
-    dataset = VisionDataset(x, K=K)
+    dataset = PatchDataset_NCHW(x, K=K, S=K)
     loader = DataLoader(dataset, batch_size=32, shuffle=False, pin_memory=True)
     embs = np.empty((dataset.N, dataset.row_num, dataset.col_num, enc.D), dtype=np.float32)  # [-1, I, J, D]
     count = 0
     enc = enc.eval()
     with torch.no_grad():
-        for xs in loader:
+        for xs, ns, iis, js in loader:
             xs = xs.cuda(1)
             embedding = enc(xs)
             b, n, d = embedding.size()
-            embedding = embedding.reshape(b, dataset.row_num, dataset.col_num, enc.D)
+            embedding = embedding.reshape(b, -1)
             embedding = embedding.detach().cpu().numpy()
-            embs[count:count + b, :, :, :] = embedding
+            for embed, n, i, j in zip(embedding, ns, iis, js):
+                embs[n, i, j] = np.squeeze(embed)
             count = count + b
     return embs
 

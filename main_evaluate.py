@@ -7,12 +7,36 @@ args = parser.parse_args()
 
 def do_evaluate_encoder_multiK(obj):
     from codes.inspection import eval_encoder_NN_multiK
-    from codes.networks import EncoderHier
+    from codes.vit import ViT
 
-    enc = EncoderHier(K=64, D=64).cuda()
-    enc.load(obj)
-    enc.eval()
-    results = eval_encoder_NN_multiK(enc, obj)
+    enc_16 = ViT(
+        image_size=48,
+        patch_size=16,
+        channels=3,
+        dim=1024,
+        depth=24,
+        heads=16,
+        mlp_dim=128,
+        dropout=0.1,
+        emb_dropout=0.1
+    ).cuda(1)
+
+    enc_32 = ViT(
+        image_size=96,
+        patch_size=32,
+        channels=3,
+        dim=1024,
+        depth=24,
+        heads=16,
+        mlp_dim=128,
+        dropout=0.1,
+        emb_dropout=0.1
+    ).cuda(1)
+    enc_16.load(obj, 16)
+    enc_16.eval()
+    enc_32.load(obj, 32)
+    enc_32.eval()
+    results = eval_encoder_NN_multiK(enc_16, enc_32, obj)
 
     det_64 = results['det_64'] * 100
     seg_64 = results['seg_64'] * 100
@@ -40,6 +64,7 @@ def main():
     print('test start')
     do_evaluate_encoder_multiK(args.obj)
     print('test end')
+
 
 if __name__ == '__main__':
     main()

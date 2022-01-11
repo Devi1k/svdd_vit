@@ -51,9 +51,9 @@ def train():
         # cls_32 = PositionClassifier(32, D).cuda(1)  # 全连接分类
         ViT_16 = ViT(
             image_size=48,
-            patch_size=16,
-            channels=3,
-            dim=1024,
+            patch_size=4,
+            channels=8,
+            dim=64,
             depth=24,
             heads=16,
             mlp_dim=128,
@@ -61,19 +61,19 @@ def train():
             emb_dropout=0.1
         ).to(device)
 
-        # ViT_32 = ViT(
-        #     image_size=96,
-        #     patch_size=32,
-        #     channels=3,
-        #     dim=1024,
-        #     depth=24,
-        #     heads=16,
-        #     mlp_dim=128,
-        #     dropout=0.1,
-        #     emb_dropout=0.1
-        # ).to(device)
+        ViT_32 = ViT(
+            image_size=96,
+            patch_size=8,
+            channels=8,
+            dim=64,
+            depth=24,
+            heads=16,
+            mlp_dim=128,
+            dropout=0.1,
+            emb_dropout=0.1
+        ).to(device)
 
-        modules = [ViT_16]
+        modules = [ViT_16, ViT_32]
         params = [list(module.parameters()) for module in modules]
         params = reduce(lambda x, y: x + y, params)
 
@@ -86,7 +86,7 @@ def train():
         rep = 100
         datasets = dict()
         datasets['pos_16'] = PositionDataset(train_x, K=16, repeat=rep)
-        # datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
+        datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
 
         dataset = DictionaryConcatDataset(datasets)
         train_loader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=2, pin_memory=True)
@@ -102,14 +102,14 @@ def train():
             loader = to_device(loader, device)
             loss_pos_16 = ViT_16(loader['pos_16'])
             # loss_pos_8 = ViT_8(loader['pos_8'])
-            # loss_pos_32 = ViT_32(loader['pos_32'])
+            loss_pos_32 = ViT_32(loader['pos_32'])
 
-            loss = loss_pos_16
+            loss = loss_pos_16 + loss_pos_32
             print("loss:%f" % loss)
             opt.zero_grad()
             loss.backward()
             opt.step()
-        aurocs = eval_encoder_NN_multiK(enc_16=ViT_16, obj=obj)
+        aurocs = eval_encoder_NN_multiK(enc_16=ViT_16, enc_32=ViT_32, obj=obj)
         log_result(obj, aurocs)
         # ViT_32.save(obj, 32)
         ViT_16.save(obj, 16)
