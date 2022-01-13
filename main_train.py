@@ -1,4 +1,6 @@
 import argparse
+import time
+
 import torch
 from torch import nn
 from codes import mvtecad
@@ -19,7 +21,7 @@ parser.add_argument('--obj', default='wood', type=str)
 parser.add_argument('--lambda_value', default=1, type=float)
 parser.add_argument('--D', default=32, type=int)
 
-parser.add_argument('--epochs', default=100, type=int)
+parser.add_argument('--epochs', default=30, type=int)
 parser.add_argument('--lr', default=1e-5, type=float)
 # # parser.add_argument('--weights', type=str, default='./vit_base_patch16_224_in21k.pth',
 # #                         help='initial weights path')
@@ -49,9 +51,9 @@ def train():
         # enc = EncoderHier(32, D).cuda(1)  # 八层卷积
         # cls_32 = PositionClassifier(32, D).cuda(1)  # 全连接分类
         # cls_32 = PositionClassifier(32, D).cuda(1)  # 全连接分类
-        ViT_16 = ViT(
-            image_size=48,
-            patch_size=4,
+        ViT_64 = ViT(
+            image_size=192,
+            patch_size=16,
             channels=8,
             dim=64,
             depth=24,
@@ -73,7 +75,7 @@ def train():
             emb_dropout=0.1
         ).to(device)
 
-        modules = [ViT_16, ViT_32]
+        modules = [ViT_64, ViT_32]
         params = [list(module.parameters()) for module in modules]
         params = reduce(lambda x, y: x + y, params)
 
@@ -85,7 +87,7 @@ def train():
 
         rep = 100
         datasets = dict()
-        datasets['pos_16'] = PositionDataset(train_x, K=16, repeat=rep)
+        datasets['pos_64'] = PositionDataset(train_x, K=64, repeat=rep)
         datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
 
         dataset = DictionaryConcatDataset(datasets)
@@ -94,30 +96,35 @@ def train():
     print('Start training')
     for i_epoch in range(args.epochs):
         # if i_epoch != 0:
+        start = time.time()
+
         print('epoch %d:' % i_epoch)
         for module in modules:
             module.train()
 
         for loader in train_loader:
             loader = to_device(loader, device)
-            loss_pos_16 = ViT_16(loader['pos_16'])
+            loss_pos_64 = ViT_64(loader['pos_64'])
             # loss_pos_8 = ViT_8(loader['pos_8'])
             loss_pos_32 = ViT_32(loader['pos_32'])
 
-            loss = loss_pos_16 + loss_pos_32
+            loss = loss_pos_64 + loss_pos_32
             print("loss:%f" % loss)
             opt.zero_grad()
             loss.backward()
             opt.step()
-        aurocs = eval_encoder_NN_multiK(enc_16=ViT_16, enc_32=ViT_32, obj=obj)
-        log_result(obj, aurocs)
+        aurocs = eval_encoder_NN_multiK(enc_64=ViT_64, enc_32=ViT_32, obj=obj)
+        end = time.time()
+        cost_time = end - start
+        log_result(obj, aurocs, cost_time)
         # ViT_32.save(obj, 32)
-        ViT_16.save(obj, 16)
+        ViT_64.save(obj, 64)
+        ViT_32.save(obj, 32)
         # ViT_8.save(obj, 8)
     print("Training end")
 
 
-def log_result(obj, aurocs):
+def log_result(obj, aurocs, cost_time):
     det_16 = aurocs['det_16'] * 100
     seg_16 = aurocs['seg_16'] * 100
     det_32 = aurocs['det_32'] * 100
@@ -135,7 +142,8 @@ def log_result(obj, aurocs):
         f'|K32| Det: {det_32:4.1f} Seg: {seg_32:4.1f} '
         f'|sum| Det: {det_sum:4.1f} Seg: {seg_sum:4.1f} '
         f'|mult| Det: {det_mult:4.1f} Seg: {seg_mult:4.1f} '
-        f'({obj})')
+        f'({obj}) '
+        f'cost_time:{cost_time}')
 
 
 if __name__ == '__main__':

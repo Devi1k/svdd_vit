@@ -5,8 +5,8 @@ from glob import glob
 from sklearn.metrics import roc_auc_score
 import os
 
-# DATASET_PATH = '/home/zhangxy/mvtec_anomaly_detection'
-DATASET_PATH = '/home/yanking/disk1/nizepu/mvtec_anomaly_detection'
+DATASET_PATH = '/home/zhangxy/mvtec_anomaly_detection'
+# DATASET_PATH = '/home/yanking/disk1/nizepu/mvtec_anomaly_detection'
 
 
 __all__ = ['objs', 'set_root_path',

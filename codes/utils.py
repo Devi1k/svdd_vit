@@ -69,19 +69,45 @@ def crop_CHW(image, i, j, K, S=1):
 
 def crop_infer_CHW(image, i, j, K, S=1):
     C, H, W = image.shape
-    max_height = 3 * K
-    max_width = 3 * K
-    min_height = 0
-    min_width = 0
+    max_length = 3 * K
+    min_length = 0
     if S == 1:
         h, w = i, j
     else:
         h = S * i
         w = S * j
+    cut_upper = h - K
+    cut_lower = h + 2 * K
+    cut_left = w - K
+    cut_right = w + 2 * K
+    # 截取边长上限
+    cut_upper_new = np.clip(cut_upper, min_length, max_length)
+    cut_lower_new = np.clip(cut_lower, min_length, max_length)
+    cut_left_new = np.clip(cut_left, min_length, max_length)
+    cut_right_new = np.clip(cut_right, min_length, max_length)
+    image_cut = image[:, cut_upper_new: cut_lower_new, cut_left_new: cut_right_new]
+    # 切割出的真实边长
+    truth_height = cut_lower_new - cut_upper_new
+    truth_width = cut_right_new - cut_left_new
+    # 补足不足的区域
+    if truth_width < max_length:
+        complement_width = max_length - truth_width
+        compl_area = np.zeros((C, truth_height, complement_width))
+        if cut_left_new != cut_left:
+            image_cut = np.concatenate((compl_area, image_cut), axis=2)
+        else:
+            image_cut = np.concatenate((image_cut, compl_area), axis=2)
+        truth_width = max_length
 
-
-
-
+    if truth_height < max_length:
+        complement_height = max_length - truth_height
+        compl_area = np.zeros((C, complement_height, truth_width))
+        if cut_left_new != cut_left:
+            image_cut = np.concatenate((compl_area, image_cut), axis=1)
+        else:
+            image_cut = np.concatenate((image_cut, compl_area), axis=1)
+    image_cut[:, K:2 * K, K:2 * K] = 0
+    return image_cut
 
 
 def cnn_output_size(H, K, S=1, P=0) -> int:

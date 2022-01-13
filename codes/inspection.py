@@ -8,23 +8,21 @@ from codes.datasets import VisionDataset
 __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
 
 
-def infer(x, enc, K):
+def infer(x, enc, K, S):
     x = NHWC2NCHW(x)
-    dataset = PatchDataset_NCHW(x, K=K, S=K)
-    loader = DataLoader(dataset, batch_size=32, shuffle=False, pin_memory=True)
+    dataset = PatchDataset_NCHW(x, K=K, S=S)
+    loader = DataLoader(dataset, batch_size=64, shuffle=False, pin_memory=True)
     embs = np.empty((dataset.N, dataset.row_num, dataset.col_num, enc.D), dtype=np.float32)  # [-1, I, J, D]
-    count = 0
     enc = enc.eval()
     with torch.no_grad():
         for xs, ns, iis, js in loader:
-            xs = xs.cuda(1)
+            xs = xs.type(torch.FloatTensor).cuda(1)
             embedding = enc(xs)
-            b, n, d = embedding.size()
-            embedding = embedding.reshape(b, -1)
+            b, d = embedding.size()
+            # embedding = embedding.reshape(b, -1)
             embedding = embedding.detach().cpu().numpy()
             for embed, n, i, j in zip(embedding, ns, iis, js):
                 embs[n, i, j] = np.squeeze(embed)
-            count = count + b
     return embs
 
 
@@ -38,20 +36,20 @@ def assess_anomaly_maps(obj, anomaly_maps):
 
 #########################
 
-def eval_encoder_NN_multiK(enc_16, enc_32, obj):
+def eval_encoder_NN_multiK(enc_64, enc_32, obj):
     print("----------evaluating------------")
     x_tr = mvtecad.get_x_standardized(obj, mode='train')
     x_te = mvtecad.get_x_standardized(obj, mode='test')
 
     # [B,13,13,32]  (batch,conv_weight,conv_height,patch_size)
-    embs16_tr = infer(x_tr, enc_16, K=16)
-    embs16_te = infer(x_te, enc_16, K=16)
+    embs16_tr = infer(x_tr, enc_64, K=64, S=16)
+    embs16_te = infer(x_te, enc_64, K=64, S=16)
 
     x_tr = mvtecad.get_x_standardized(obj, mode='train')
     x_te = mvtecad.get_x_standardized(obj, mode='test')
     # [B,57,57,32]
-    embs32_tr = infer(x_tr, enc_32, K=32)
-    embs32_te = infer(x_te, enc_32, K=32)
+    embs32_tr = infer(x_tr, enc_32, K=32, S=8)
+    embs32_te = infer(x_te, enc_32, K=32, S=8)
 
     embs16 = embs16_tr, embs16_te
     embs32 = embs32_tr, embs32_te
@@ -65,12 +63,12 @@ def eval_embeddings_NN_multiK(obj, embs16, embs32, NN=1):
     maps_16 = measure_emb_NN(emb_te, emb_tr, method='kdt', NN=NN)
     # 距离最近的正常的patch的距离
     # [B,256,256]
-    maps_16 = distribute_scores(maps_16, (256, 256), K=16, S=16)  # 分配到每个像素上
+    maps_16 = distribute_scores(maps_16, (256, 256), K=64, S=16)  # 分配到每个像素上
     det_16, seg_16 = assess_anomaly_maps(obj, maps_16)
 
     emb_tr, emb_te = embs32
     maps_32 = measure_emb_NN(emb_te, emb_tr, method='ngt', NN=NN)
-    maps_32 = distribute_scores(maps_32, (256, 256), K=32, S=32)
+    maps_32 = distribute_scores(maps_32, (256, 256), K=32, S=8)
     det_32, seg_32 = assess_anomaly_maps(obj, maps_32)
 
     maps_sum = maps_16 + maps_32
