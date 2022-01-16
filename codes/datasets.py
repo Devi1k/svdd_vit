@@ -16,11 +16,10 @@ def generate_coords_position(H, W, K):
         p1 = generate_coords(H, W, K)
         h1, w1 = p1
 
-    pos = np.arange(8)
+    # pos = np.arange(8)
 
     with task('P'):
         J = K // 4
-        p2 = []
         K3_4 = 3 * K // 4
         # for i in range(8):
         h_dir, w_dir = pos_to_diff[0]
@@ -32,9 +31,8 @@ def generate_coords_position(H, W, K):
         h2 = h1 + h_diff
         w2 = w1 + w_diff
 
-        h2 = np.clip(h2, 0, H - K * 3)
-        w2 = np.clip(w2, 0, W - K * 3)
-
+        h2 = np.clip(h2, 0, H)
+        w2 = np.clip(w2, 0, W)
         p2 = (h2, w2)
 
         # print(p2)
@@ -170,47 +168,12 @@ class PositionDataset(Dataset):
         image = self.x[n]
         p = generate_coords_position(256, 256, K)  # 求出p1以及其余七个格坐标
 
-        patch_image = crop_image_CHW(image, p, K * 3)
+        patch_image = crop_image_CHW(image, p, K)
 
         rgbshift = np.random.normal(scale=0.02, size=(3, 1, 1))
         patch_image += rgbshift
 
         noise1 = np.random.normal(scale=0.02, size=(3, K * 3, K * 3))
         patch_image += noise1
-
-        # # 截取p1,p2所在patch
-        # patch1 = crop_image_CHW(image, p1, K).copy()
-        # patch2 = []
-        # # 截取八个patch图像
-        # for _p2 in p2:
-        #     patch_2 = crop_image_CHW(image, _p2, K).copy()
-        #     # print(patch_2.shape)
-        #     patch2.append(patch_2)
-        #
-        # # perturb RGB
-        # rgbshift1 = np.random.normal(scale=0.02, size=(3, 1, 1))
-        # patch1 += rgbshift1
-        # noise1 = np.random.normal(scale=0.02, size=(3, K, K))
-        # patch1 += noise1
-        #
-        # for p2 in patch2:
-        #     rgbshift2 = np.random.normal(scale=0.02, size=(3, 1, 1))
-        #     p2 += rgbshift2
-        #     noise2 = np.random.normal(scale=0.02, size=(3, K, K))
-        #     p2 += noise2
-
-        # # additive noise
-        # for p2 in patch2:
-
-        # mask_id = np.random.randint(8)
-        # mask_origin = patch2[mask_id]
-        # patch2[mask_id] = np.zeros((3, K, K)).astype(np.float32)
-
-        # patch1 = patch1.reshape((-1))
-        # patch1 = np.expand_dims(patch1, axis=0)
-        # for patch_2 in patch2:
-        #     patch_2 = patch_2.reshape((-1))
-        #     patch_2 = np.expand_dims(patch_2, axis=0)
-        #     patch1 = np.concatenate((patch1, patch_2), axis=0)
 
         return patch_image

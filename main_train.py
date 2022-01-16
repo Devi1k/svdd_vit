@@ -102,14 +102,15 @@ def train():
         for module in modules:
             module.train()
 
-        for loader in train_loader:
+        for j, loader in enumerate(train_loader):
             loader = to_device(loader, device)
             loss_pos_64 = ViT_64(loader['pos_64'])
             # loss_pos_8 = ViT_8(loader['pos_8'])
             loss_pos_32 = ViT_32(loader['pos_32'])
 
             loss = loss_pos_64 + loss_pos_32
-            print("loss:%f" % loss)
+            if j % 50 == 0:
+                print("loss:%f" % loss)
             opt.zero_grad()
             loss.backward()
             opt.step()

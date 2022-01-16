@@ -16,7 +16,7 @@ def infer(x, enc, K, S):
     enc = enc.eval()
     with torch.no_grad():
         for xs, ns, iis, js in loader:
-            xs = xs.type(torch.FloatTensor).cuda(1)
+            xs = xs.cuda(1)
             embedding = enc(xs)
             b, d = embedding.size()
             # embedding = embedding.reshape(b, -1)
