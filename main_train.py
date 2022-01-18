@@ -87,11 +87,13 @@ def train():
 
         rep = 100
         datasets = dict()
-        datasets['pos_64'] = PositionDataset(train_x, K=64, repeat=rep)
-        datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
+        # datasets['pos_64'] = PositionDataset(train_x, K=64, repeat=rep)
+        # datasets['pos_32'] = PositionDataset(train_x, K=32, repeat=rep)
+        datasets[f'svdd_64'] = SVDD_Dataset(train_x, K=64, repeat=rep)
+        datasets[f'svdd_32'] = SVDD_Dataset(train_x, K=32, repeat=rep)
 
         dataset = DictionaryConcatDataset(datasets)
-        train_loader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=2, pin_memory=True)
+        train_loader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=2, pin_memory=True)
 
     print('Start training')
     for i_epoch in range(args.epochs):
@@ -102,13 +104,14 @@ def train():
         for module in modules:
             module.train()
 
-        for j, loader in enumerate(train_loader):
+        for j,loader in enumerate(train_loader):
             loader = to_device(loader, device)
-            loss_pos_64 = ViT_64(loader['pos_64'])
-            # loss_pos_8 = ViT_8(loader['pos_8'])
-            loss_pos_32 = ViT_32(loader['pos_32'])
+            # loss_pos_64 = ViT_64(loader['pos_64'])
+            # loss_pos_32 = ViT_32(loader['pos_32'])
+            loss_svdd_64 = ViT_64(loader['svdd_64'])
+            loss_svdd_32 = ViT_32(loader['svdd_32'])
 
-            loss = loss_pos_64 + loss_pos_32
+            loss = loss_svdd_64 + loss_svdd_32
             if j % 50 == 0:
                 print("loss:%f" % loss)
             opt.zero_grad()

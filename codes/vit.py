@@ -11,6 +11,13 @@ device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 
 # helpers
+def mask(mask_list, b, n):
+    mask = np.ones((b, n, 1), dtype='float32')
+    for i in range(b):
+        mask[i][mask_list[i]] = 0
+    mask = torch.from_numpy(mask).to(torch.float32).to('cuda:1')
+    return mask
+
 
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
@@ -166,24 +173,24 @@ class ViT(nn.Module):
         # x, _ = image
         x = self.conv(x)
         x = self.to_patch_embedding(x)
-        b, n, _ = x.shape
-        if self.training:
-            mask_id = np.random.rand(b, n, 1)
-            mask_id = torch.from_numpy(mask_id).to(torch.float32).to('cuda:1')
-            mask_id[mask_id <= 0.5] = 0
-            mask_id[mask_id > 0.5] = 1
+        b, n, d = x.shape
 
-            x_ori = x.mul((1 - mask_id))
-            x = x * mask_id
-            # cls_tokens = repeat(self.cls_token, '() n d -> b n d', b = b)
-            # x = torch.cat((cls_tokens, x), dim=1)
+        if self.training:
+            mask_list = []
+            for i in range(b):
+                mask_id = np.random.randint(9)
+                mask_list.append(mask_id)
+            mask = np.ones((b, n, 1), dtype='float32')
+            for i in range(b):
+                mask[i][mask_list[i]] = 0
+            mask = torch.from_numpy(mask).to(torch.float32).to('cuda:1')
+            x_ori = x.mul((1 - mask))
+            x = x * mask
             x += self.pos_embedding[:, :n]
             x = self.dropout(x)
             x = self.transformer(x)
-            # x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
             x = self.to_latent(x)
-            # x = self.mlp_head(x)
-            x_cur = x.mul((1 - mask_id))
+            x_cur = x.mul((1 - mask))
             diff = x_ori - x_cur
             l2 = diff.norm(dim=1)
             loss_diff = l2.mean()
@@ -191,14 +198,10 @@ class ViT(nn.Module):
             return loss_diff
         else:
 
-            # cls_tokens = repeat(self.cls_token, '() n d -> b n d', b = b)
-            # x = torch.cat((cls_tokens, x), dim=1)
             x += self.pos_embedding[:, :n]
             x = self.dropout(x)
             x = self.transformer(x)
-            # x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
             x = self.to_latent(x)
-            # x = self.mlp_head(x)
             return x[:, 4, :]
 
     def save(self, name, K):

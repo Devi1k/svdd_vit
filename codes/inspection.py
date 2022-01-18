@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from .utils import NHWC2NCHW, distribute_scores, PatchDataset_NCHW
-from codes.datasets import VisionDataset
 
 __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
 

@@ -48,20 +48,18 @@ def generate_coords_svdd(H, W, K):
     with task('P2'):
         J = K // 32
 
-        h_jit, w_jit = 0, 0
+        p2 = []
 
-        while h_jit == 0 and w_jit == 0:
-            h_jit = np.random.randint(-J, J + 1)
-            w_jit = np.random.randint(-J, J + 1)
+        for i in range(8):
+            h_jit, w_jit = pos_to_diff[i]
+            h_jit, w_jit = J * h_jit, J * w_jit
+            h2 = h1 + h_jit
+            w2 = w1 + w_jit
 
-        h2 = h1 + h_jit
-        w2 = w1 + w_jit
-
-        # 使坐标保持在图像范围以内
-        h2 = np.clip(h2, 0, H - K)
-        w2 = np.clip(w2, 0, W - K)
-
-        p2 = (h2, w2)
+            # 使坐标保持在图像范围以内
+            h2 = np.clip(h2, 0, H - K)
+            w2 = np.clip(w2, 0, W - K)
+            p2.append((h2, w2))
 
     return p1, p2
 
@@ -99,54 +97,23 @@ class SVDD_Dataset(Dataset):
         image = self.arr[n]
 
         patch1 = crop_image_CHW(image, p1, K)
-        patch2 = crop_image_CHW(image, p2, K)
+        patch2 = []
+        for j in p2:
+            patch2.append(crop_image_CHW(image, j, K))
+        image = patch2[0]
+        for i in range(1, 3):
+            image = np.concatenate((image, patch2[i]), axis=2)
 
-        return patch1, patch2
+        image1 = patch2[3]
+        image1 = np.concatenate((image1, patch1), axis=2)
+        image1 = np.concatenate((image1, patch2[4]), axis=2)
 
-    @staticmethod
-    def infer(enc, batch):
-        x1s, x2s, = batch
-        h1s = enc(x1s)
-        h2s = enc(x2s)
-        diff = h1s - h2s
-        l2 = diff.norm(dim=1)
-        loss = l2.mean()
+        image2 = patch2[5]
+        for i in range(6, 8):
+            image2 = np.concatenate((image2, patch2[i]), axis=2)
 
-        return loss
-
-
-class VisionDataset(Dataset):
-    def __init__(self, x, K=64, repeat=1):
-        super(Dataset, self).__init__()
-        self.x = np.asarray(x)
-        self.K = K
-        self.N = self.x.shape[0]
-        self.repeat = repeat
-
-    def __len__(self):
-        N = self.x.shape[0]
-        return N * self.repeat
-
-    @property
-    def row_num(self):
-        N, C, H, W = self.x.shape
-        K = self.K
-        I = W // K
-        return I
-
-    @property
-    def col_num(self):
-        N, C, H, W = self.x.shape
-        K = self.K
-        J = H // K
-        return J
-
-    def __getitem__(self, idx):
-        N = self.x.shape[0]
-        n = idx % N
-
-        image = self.x[n]
-        return image
+        image_cut = np.concatenate((image, image1, image2), axis=1)
+        return image_cut
 
 
 class PositionDataset(Dataset):
