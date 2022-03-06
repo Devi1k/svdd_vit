@@ -1,50 +1,37 @@
 import argparse
+import logging
 import time
 
 import torch
-from torch import nn
 from codes import mvtecad
 from functools import reduce
 from torch.utils.data import DataLoader
-import torch.distributed as dist
 from codes.datasets import *
-from codes.networks import *
 from codes.inspection import eval_encoder_NN_multiK
 from codes.utils import *
 from codes.vit import Transformer, ViT
-# from linformer import Linformer
-from tqdm import tqdm
-
+from codes.logger import Logger
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--obj', default='wood', type=str)
 parser.add_argument('--lambda_value', default=1, type=float)
 parser.add_argument('--D', default=32, type=int)
 
-parser.add_argument('--epochs', default=30, type=int)
-parser.add_argument('--lr', default=1e-5, type=float)
+parser.add_argument('--epochs', default=100, type=int)
+parser.add_argument('--lr', default=1e-6, type=float)
 # # parser.add_argument('--weights', type=str, default='./vit_base_patch16_224_in21k.pth',
 # #                         help='initial weights path')
 args = parser.parse_args()
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-
-
-# efficient_transformer = Linformer(
-#     dim=32,
-#     seq_len=10,  # 3*3 patches + 1 cls-token
-#     depth=12,
-#     heads=8,
-#     k=32
-# )
-
+logger = Logger().getLogger()
 
 def train():
     obj = args.obj
     D = args.D
     lr = args.lr
-    # print(torch.cuda.device_count())
+    logger.info(torch.cuda.device_count())
 
-    # print(device)
+    logger.info(device)
     # 搭建网络结构
 
     with task('Networks'):
@@ -93,14 +80,14 @@ def train():
         datasets[f'svdd_32'] = SVDD_Dataset(train_x, K=32, repeat=rep)
 
         dataset = DictionaryConcatDataset(datasets)
-        train_loader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=2, pin_memory=True)
+        train_loader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=2, pin_memory=True)
 
-    print('Start training')
+    logger.info('Start training')
     for i_epoch in range(args.epochs):
         # if i_epoch != 0:
         start = time.time()
 
-        print('epoch %d:' % i_epoch)
+        logger.info('epoch %d:' % i_epoch)
         for module in modules:
             module.train()
 
@@ -113,7 +100,7 @@ def train():
 
             loss = loss_svdd_64 + loss_svdd_32
             if j % 50 == 0:
-                print("loss:%f" % loss)
+                logger.info("loss:%f" % loss)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -125,7 +112,7 @@ def train():
         ViT_64.save(obj, 64)
         ViT_32.save(obj, 32)
         # ViT_8.save(obj, 8)
-    print("Training end")
+    logger.info("Training end")
 
 
 def log_result(obj, aurocs, cost_time):
@@ -141,7 +128,7 @@ def log_result(obj, aurocs, cost_time):
     det_mult = aurocs['det_mult'] * 100
     seg_mult = aurocs['seg_mult'] * 100
 
-    print(
+    logger.info(
         f'|K16| Det: {det_16:4.1f} Seg: {seg_16:4.1f} '
         f'|K32| Det: {det_32:4.1f} Seg: {seg_32:4.1f} '
         f'|sum| Det: {det_sum:4.1f} Seg: {seg_sum:4.1f} '

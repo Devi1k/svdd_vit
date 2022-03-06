@@ -197,12 +197,22 @@ class ViT(nn.Module):
 
             return loss_diff
         else:
-
+            mask_list = []
+            mask_id = 4
+            for i in range(b):
+                mask_list.append(mask_id)
+            mask = np.ones((b, n, 1), dtype='float32')
+            for i in range(b):
+                mask[i][mask_list[i]] = 0
+            mask = torch.from_numpy(mask).to(torch.float32).to('cuda:1')
+            # x_ori = x.mul((1 - mask))
             x += self.pos_embedding[:, :n]
             x = self.dropout(x)
             x = self.transformer(x)
             x = self.to_latent(x)
-            return x[:, 4, :]
+            x_cur = x.mul((1 - mask))
+            res = x_cur[:, mask_id, :]
+            return res
 
     def save(self, name, K):
         fpath = self.fpath_from_name(name, K)

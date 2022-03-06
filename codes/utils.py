@@ -40,6 +40,18 @@ def task(_):
     yield
 
 
+pos_to_diff = {
+    0: (-1, -1),
+    1: (-1, 0),
+    2: (-1, 1),
+    3: (0, -1),
+    4: (0, 1),
+    5: (1, -1),
+    6: (1, 0),
+    7: (1, 1)
+}
+
+
 class DictionaryConcatDataset(Dataset):
     def __init__(self, d_of_datasets):
         self.d_of_datasets = d_of_datasets
@@ -72,41 +84,43 @@ def crop_infer_CHW(image, i, j, K, S=1):
     max_length = 3 * K
     min_length = 0
     if S == 1:
-        h, w = i, j
+        h1, w1 = i, j
     else:
-        h = S * i
-        w = S * j
-    cut_upper = h - K
-    cut_lower = h + 2 * K
-    cut_left = w - K
-    cut_right = w + 2 * K
-    # 截取边长上限
-    cut_upper_new = np.clip(cut_upper, min_length, max_length)
-    cut_lower_new = np.clip(cut_lower, min_length, max_length)
-    cut_left_new = np.clip(cut_left, min_length, max_length)
-    cut_right_new = np.clip(cut_right, min_length, max_length)
-    image_cut = image[:, cut_upper_new: cut_lower_new, cut_left_new: cut_right_new]
-    # 切割出的真实边长
-    truth_height = cut_lower_new - cut_upper_new
-    truth_width = cut_right_new - cut_left_new
-    # 补足不足的区域
-    if truth_width < max_length:
-        complement_width = max_length - truth_width
-        compl_area = np.zeros((C, truth_height, complement_width), dtype="float32")
-        if cut_left_new != cut_left:
-            image_cut = np.concatenate((compl_area, image_cut), axis=2)
-        else:
-            image_cut = np.concatenate((image_cut, compl_area), axis=2)
-        truth_width = max_length
+        h1 = S * i
+        w1 = S * j
 
-    if truth_height < max_length:
-        complement_height = max_length - truth_height
-        compl_area = np.zeros((C, complement_height, truth_width), dtype="float32")
-        if cut_left_new != cut_left:
-            image_cut = np.concatenate((compl_area, image_cut), axis=1)
-        else:
-            image_cut = np.concatenate((image_cut, compl_area), axis=1)
-    image_cut[:, K:2 * K, K:2 * K] = 0
+    p1 = h1, w1
+    patch1 = crop_image_CHW(image, p1, K)
+    J = K // 32
+    p2 = []
+
+    for i in range(8):
+        h_jit, w_jit = pos_to_diff[i]
+        h_jit, w_jit = J * h_jit, J * w_jit
+        h2 = h1 + h_jit
+        w2 = w1 + w_jit
+
+        # 使坐标保持在图像范围以内
+        h2 = np.clip(h2, 0, H - K)
+        w2 = np.clip(w2, 0, W - K)
+        p2.append((h2, w2))
+    patch2 = []
+    for j in p2:
+        patch2.append(crop_image_CHW(image, j, K))
+    image = patch2[0]
+    for i in range(1, 3):
+        image = np.concatenate((image, patch2[i]), axis=2)
+
+    image1 = patch2[3]
+    image1 = np.concatenate((image1, patch1), axis=2)
+    image1 = np.concatenate((image1, patch2[4]), axis=2)
+
+    image2 = patch2[5]
+    for i in range(6, 8):
+        image2 = np.concatenate((image2, patch2[i]), axis=2)
+
+    image_cut = np.concatenate((image, image1, image2), axis=1)
+
     return image_cut
 
 

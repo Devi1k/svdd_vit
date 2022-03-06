@@ -35,9 +35,9 @@ def generate_coords_position(H, W, K):
         w2 = np.clip(w2, 0, W)
         p2 = (h2, w2)
 
-        # print(p2)
+        # logger.info(p2)
         # tuple(p2)
-        # print(p2)
+        # logger.info(p2)
     return p2
 
 

@@ -3,10 +3,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from .utils import NHWC2NCHW, distribute_scores, PatchDataset_NCHW
-
+from codes.logger import Logger
 __all__ = ['eval_encoder_NN_multiK', 'eval_embeddings_NN_multiK']
 
-
+logger = Logger().getLogger()
 def infer(x, enc, K, S):
     x = NHWC2NCHW(x)
     dataset = PatchDataset_NCHW(x, K=K, S=S)
@@ -17,7 +17,7 @@ def infer(x, enc, K, S):
         for xs, ns, iis, js in loader:
             xs = xs.cuda(1)
             embedding = enc(xs)
-            b, d = embedding.size()
+            # b, d = embedding.size()
             # embedding = embedding.reshape(b, -1)
             embedding = embedding.detach().cpu().numpy()
             for embed, n, i, j in zip(embedding, ns, iis, js):
@@ -36,7 +36,7 @@ def assess_anomaly_maps(obj, anomaly_maps):
 #########################
 
 def eval_encoder_NN_multiK(enc_64, enc_32, obj):
-    print("----------evaluating------------")
+    logger.info("----------evaluating------------")
     x_tr = mvtecad.get_x_standardized(obj, mode='train')
     x_te = mvtecad.get_x_standardized(obj, mode='test')
 
