@@ -1,5 +1,6 @@
 import numpy as np
 from torch.utils.data import Dataset
+
 from .utils import *
 
 __all__ = ['SVDD_Dataset', 'PositionDataset']
@@ -91,23 +92,25 @@ class SVDD_Dataset(Dataset):
         N = self.arr.shape[0]
         K = self.K
         n = idx % N
-
+        # 取像素点，p1是一块，p2是周围两个像素以内的八块
         p1, p2 = generate_coords_svdd(256, 256, K)
 
         image = self.arr[n]
-
+        # 切块 按K大小切
         patch1 = crop_image_CHW(image, p1, K)
         patch2 = []
         for j in p2:
             patch2.append(crop_image_CHW(image, j, K))
+        # 按实际顺序拼接成3*3的图（九块）
+        # 第一行
         image = patch2[0]
         for i in range(1, 3):
             image = np.concatenate((image, patch2[i]), axis=2)
-
+        # 第二行
         image1 = patch2[3]
         image1 = np.concatenate((image1, patch1), axis=2)
         image1 = np.concatenate((image1, patch2[4]), axis=2)
-
+        # 第三行
         image2 = patch2[5]
         for i in range(6, 8):
             image2 = np.concatenate((image2, patch2[i]), axis=2)
